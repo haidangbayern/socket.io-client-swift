@@ -29,7 +29,7 @@ class SocketMangerTest : XCTestCase {
 
         XCTAssertEqual(manager.config.first!, .secure(true))
     }
-
+    
     func testBackoffIntervalCalulation() {
         XCTAssertLessThanOrEqual(manager.reconnectInterval(attempts: -1), Double(manager.reconnectWaitMax))
         XCTAssertLessThanOrEqual(manager.reconnectInterval(attempts: 0), 15)
@@ -37,7 +37,7 @@ class SocketMangerTest : XCTestCase {
         XCTAssertLessThanOrEqual(manager.reconnectInterval(attempts: 2), 33.75)
         XCTAssertLessThanOrEqual(manager.reconnectInterval(attempts: 50), Double(manager.reconnectWaitMax))
         XCTAssertLessThanOrEqual(manager.reconnectInterval(attempts: 10000), Double(manager.reconnectWaitMax))
-
+        
         XCTAssertGreaterThanOrEqual(manager.reconnectInterval(attempts: -1), Double(manager.reconnectWait))
         XCTAssertGreaterThanOrEqual(manager.reconnectInterval(attempts: 0), Double(manager.reconnectWait))
         XCTAssertGreaterThanOrEqual(manager.reconnectInterval(attempts: 1), 15)
@@ -80,24 +80,24 @@ class SocketMangerTest : XCTestCase {
         waitForExpectations(timeout: 0.3)
     }
 
-//    func testManagerEmitAll() {
-//        setUpSockets()
-//
-//        socket.expectations[ManagerExpectation.emitAllEventCalled] = expectation(description: "The manager should emit an event to the default socket")
-//        socket2.expectations[ManagerExpectation.emitAllEventCalled] = expectation(description: "The manager should emit an event to the socket")
-//
-//        socket2.on(clientEvent: .connect) {data, ack in
-//            print("connect")
-//            self.manager.emitAll("event", "testing")
-//        }
-//
-//        socket.connect()
-//        socket2.connect()
-//
-//        manager.fakeConnecting(toNamespace: "/swift")
-//
-//        waitForExpectations(timeout: 0.3)
-//    }
+    func testManagerEmitAll() {
+        setUpSockets()
+
+        socket.expectations[ManagerExpectation.emitAllEventCalled] = expectation(description: "The manager should emit an event to the default socket")
+        socket2.expectations[ManagerExpectation.emitAllEventCalled] = expectation(description: "The manager should emit an event to the socket")
+
+        socket2.on(clientEvent: .connect) {data, ack in
+            self.manager.emitAll("event", "testing")
+        }
+
+        socket.connect()
+        socket2.connect()
+
+        manager.fakeConnecting()
+        manager.fakeConnecting(toNamespace: "/swift")
+
+        waitForExpectations(timeout: 0.3)
+    }
 
     func testManagerSetsConfigs() {
         let queue = DispatchQueue(label: "testQueue")
@@ -147,30 +147,38 @@ class SocketMangerTest : XCTestCase {
     }
 }
 
-public enum ManagerExpectation: String {
+public enum ManagerExpectation : String {
     case didConnectCalled
     case didDisconnectCalled
     case emitAllEventCalled
 }
 
-public class TestManager: SocketManager {
+public class TestManager : SocketManager {
     public override func disconnect() {
         setTestStatus(.disconnected)
     }
 
+    @objc
     public func testSocket(forNamespace nsp: String) -> TestSocket {
         return socket(forNamespace: nsp) as! TestSocket
     }
 
+    @objc
+    public func fakeConnecting(toNamespace nsp: String) {
+        DispatchQueue.main.asyncAfter(deadline: DispatchTime.now() + 0.1) {
+            // Fake connecting
+            self.parseEngineMessage("0\(nsp)")
+        }
+    }
+
+    @objc
     public func fakeDisconnecting() {
         engineDidClose(reason: "")
     }
 
-    public func fakeConnecting(toNamespace nsp: String = "/") {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-            // Fake connecting
-            self.parseEngineMessage("0\(nsp)")
-        }
+    @objc
+    public func fakeConnecting() {
+        engineDidOpen(reason: "")
     }
 
     public override func socket(forNamespace nsp: String) -> SocketIOClient {
@@ -181,25 +189,43 @@ public class TestManager: SocketManager {
     }
 }
 
-public class TestSocket: SocketIOClient {
+public class TestSocket : SocketIOClient {
     public var expectations = [ManagerExpectation: XCTestExpectation]()
 
-    public override func didConnect(toNamespace nsp: String, payload: [String: Any]?) {
+    @objc
+    public var expects =  NSMutableDictionary()
+
+    public override func didConnect(toNamespace nsp: String) {
         expectations[ManagerExpectation.didConnectCalled]?.fulfill()
         expectations[ManagerExpectation.didConnectCalled] = nil
 
-        super.didConnect(toNamespace: nsp, payload: payload)
+        if let expect = expects[ManagerExpectation.didConnectCalled.rawValue] as? XCTestExpectation {
+            expect.fulfill()
+            expects[ManagerExpectation.didConnectCalled.rawValue] = nil
+        }
+
+        super.didConnect(toNamespace: nsp)
     }
 
     public override func didDisconnect(reason: String) {
         expectations[ManagerExpectation.didDisconnectCalled]?.fulfill()
         expectations[ManagerExpectation.didDisconnectCalled] = nil
 
+        if let expect = expects[ManagerExpectation.didDisconnectCalled.rawValue] as? XCTestExpectation {
+            expect.fulfill()
+            expects[ManagerExpectation.didDisconnectCalled.rawValue] = nil
+        }
+
         super.didDisconnect(reason: reason)
     }
 
-    public override func emit(_ event: String, _ items: SocketData..., completion: (() -> ())? = nil) {
+    public override func emit(_ event: String, with items: [Any], completion: (() -> ())?) {
         expectations[ManagerExpectation.emitAllEventCalled]?.fulfill()
         expectations[ManagerExpectation.emitAllEventCalled] = nil
+
+        if let expect = expects[ManagerExpectation.emitAllEventCalled.rawValue] as? XCTestExpectation {
+            expect.fulfill()
+            expects[ManagerExpectation.emitAllEventCalled.rawValue] = nil
+        }
     }
 }
