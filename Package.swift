@@ -8,10 +8,10 @@ let package = Package(
         .library(name: "SocketIO", targets: ["SocketIO"])
     ],
     dependencies: [
-        .package(url: "https://github.com/daltoniam/Starscream", .upToNextMinor(from: "3.1.0")),
+        .package(url: "https://github.com/haidangbayern/Starscream", .upToNextMinor(from: "3.1.0")),
     ],
     targets: [
-        .target(name: "SocketIO", dependencies: ["Starscream"]),
+        .target(name: "SocketIO", dependencies: ["StarscreamIII"]),
         .testTarget(name: "TestSocketIO", dependencies: ["SocketIO"]),
     ]
 )

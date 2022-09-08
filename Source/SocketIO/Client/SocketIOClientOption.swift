@@ -23,7 +23,7 @@
 //  THE SOFTWARE.
 
 import Foundation
-import Starscream
+import StarscreamIII
 
 protocol ClientOption : CustomStringConvertible, Equatable {
     func getSocketIOOptionValue() -> Any

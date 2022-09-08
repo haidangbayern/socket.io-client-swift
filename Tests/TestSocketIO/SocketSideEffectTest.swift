@@ -8,7 +8,7 @@
 
 import XCTest
 @testable import SocketIO
-import Starscream
+import StarscreamIII
 
 class SocketSideEffectTest: XCTestCase {
     func testInitialCurrentAck() {
